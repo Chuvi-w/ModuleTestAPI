@@ -8,7 +8,7 @@
 int main(int argc, char* argv[])
 {
   // CallTest();
-   SetMainTest(&MainTest);
+   TApi_Init(&MainMenu, TODO);
    printf("_____________________________\r\n");
 //   PrintTestMap(&MainTest,NULL);
    do 

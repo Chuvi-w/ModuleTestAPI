@@ -26,40 +26,48 @@ typedef enum TApi_BOOL
    TApi_TRUE
 }TApi_BOOL;
 
-typedef void (*pTestFunc)(void *Params);
+typedef void(*pTestFunc)(void *Params);
+typedef union ItemPointer_u
+{
+   pTestFunc Func;
+   struct TestMenu_s *Menu;
+}ItemPointer_t;
+
+typedef struct MenuItem_s
+{
+   char Key;         //Кнопка
+   ItemPointer_t Ptr;    //Функция, которая должна выполняться при нажатии на кнопку или ссылка на другое меню.
+   void *Params;     //Параметры, передаваемые функции
+   char *Description;//Описание.
+   TApi_BOOL IsMenu;//TRUE-менюшка, FALSE-функция.
+}MenuItem_t;
+
 typedef struct TestMenu_s
 {
-   char Key;
-   void *pNewTest;
-   void *Params;
-   char *Description;
-   TApi_BOOL IsMenu;
-}TestMenu_t;
-
-typedef struct TestData_s
-{
-   char *Title;
-   TestMenu_t *Menu;
+   char *Title;         //Заголовок меню.
+   MenuItem_t *Items;
    int IncLevel; //Для исключения зацикливания при проходе по всему дереву тестов, если тесты ссылаются друг на друга.
    int NumItems;//Кол-во пунктов
-   struct TestData_s *PrevTest;
-}TestData_t;
+   struct TestMenu_s *PrevTest;
+   TApi_BOOL SpewBaseItems;
+}TestMenu_t;
 
 
-#define AddTestFunc(key, func, description) {key, func, TApi_NULL, description, TApi_FALSE},               //Добавляет функцию в меню теста без параметров (передаётся 0)
-#define AddTestPFun(key, func, param, description) {key,func,(void*)param,description,TApi_FALSE}, //Добавляет функцию в меню теста с параметром. (Fun вместо Func чтобы менюшки красиво смотрелись в исходниках)
-#define AddTestMenu(key, menu) {key,(void*)menu,TApi_NULL,TApi_NULL,TApi_TRUE},      //Добавляет переход на новое меню.
-#define TestMenuEnd {0,0,0,0}
+#define MenuItemFunc(key, func, description) {key, func, TApi_NULL, description, TApi_FALSE},               //Добавляет функцию в меню  без параметров (передаётся 0)
+#define MenuItemPFun(key, func, param, description) {key,func,(void*)param,description,TApi_FALSE}, //Добавляет функцию в меню с параметром. (Fun вместо Func чтобы менюшки красиво смотрелись в исходниках)
+#define MenuItemLink(key, menu) {key,(void*)menu,TApi_NULL,TApi_NULL,TApi_TRUE},      //Ссылка на другое меню.
+
+
 #define SetTestData(Title,Descript) {Title,Descript,TApi_NULL,sizeof(Descript)/sizeof(Descript[0]),TApi_NULL}
 #define DeclareTest(Name,Title,Descript) TestData_t Name ={Title,Descript,TApi_NULL,sizeof(Descript)/sizeof(Descript[0]),TApi_NULL}
 
-
+typedef struct  TApi_Data_s TApi_Data_t;
 #ifdef __cplusplus
 extern "C" 
 {
 #endif
-   TApi_BOOL SetMainTest(TestData_t *Test);
-   void PrintTestMap(TestData_t *Test, int IncLevel);
+   TApi_Data_t *TApi_Init(TestMenu_t *MainMenu, TestMenu_t *BaseMenu); //MainMenu - основная менюшка, BaseMenu - дополнения к каждой менюшке.
+   void PrintTestMap(TestMenu_t *Test, int IncLevel);
    void ParseTestKey(char Key);
 #ifdef __cplusplus
 }

@@ -10,24 +10,24 @@ void TExit(void *p)
    exit(0);
 }
 
-TestMenu_t MainMenu[]=
+MenuItem_t MainMenu[]=
 {
-   AddTestMenu('1',&Test1)
-   AddTestMenu('2',&Test2)
-   AddTestFunc('z',TExit,"Exit")
+   MenuItemLink('1',&Test1)
+   MenuItemLink('2',&Test2)
+   MenuItemFunc('z',TExit,"Exit")
 };
 
-DeclareTest(MainTest,"Main Test",MainMenu);
+DeclareTest(MainMenu,"Main Test",MainMenu);
 
 
 
-TestMenu_t Test1Menu[]=
+MenuItem_t Test1Menu[]=
 {
-   AddTestFunc('1',NULL,"Func1")
-   AddTestFunc('2',NULL,"Func2")
-   AddTestMenu('0',&Test2)
-   AddTestFunc('m',NULL,"Func3")
-   AddTestFunc('4',NULL,"Func4")
+   MenuItemFunc('1',NULL,"Func1")
+   MenuItemFunc('2',NULL,"Func2")
+   MenuItemLink('0',&Test2)
+   MenuItemFunc('m',NULL,"Func3")
+   MenuItemFunc('4',NULL,"Func4")
 };
 DeclareTest(Test1,"Test #1",Test1Menu);
 
