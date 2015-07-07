@@ -27,10 +27,12 @@ typedef enum TApi_BOOL
 }TApi_BOOL;
 
 typedef void(*pTestFunc)(void *Params);
+typedef struct TestMenu_s TestMenu_t;
 typedef union ItemPointer_u
 {
+   void *Common;
    pTestFunc Func;
-   struct TestMenu_s *Menu;
+   TestMenu_t *Menu;
 }ItemPointer_t;
 
 typedef struct MenuItem_s
@@ -42,33 +44,36 @@ typedef struct MenuItem_s
    TApi_BOOL IsMenu;//TRUE-менюшка, FALSE-функция.
 }MenuItem_t;
 
-typedef struct TestMenu_s
+struct TestMenu_s
 {
    char *Title;         //Заголовок меню.
    MenuItem_t *Items;
    int IncLevel; //Для исключения зацикливания при проходе по всему дереву тестов, если тесты ссылаются друг на друга.
    int NumItems;//Кол-во пунктов
-   struct TestMenu_s *PrevTest;
+   struct TestMenu_s *PrevMenu;
    TApi_BOOL SpewBaseItems;
-}TestMenu_t;
+};
 
 
 #define MenuItemFunc(key, func, description) {key, func, TApi_NULL, description, TApi_FALSE},               //Добавляет функцию в меню  без параметров (передаётся 0)
 #define MenuItemPFun(key, func, param, description) {key,func,(void*)param,description,TApi_FALSE}, //Добавляет функцию в меню с параметром. (Fun вместо Func чтобы менюшки красиво смотрелись в исходниках)
-#define MenuItemLink(key, menu) {key,(void*)menu,TApi_NULL,TApi_NULL,TApi_TRUE},      //Ссылка на другое меню.
+#define MenuItemLink(key, menu) {key,menu,TApi_NULL,TApi_NULL,TApi_TRUE},      //Ссылка на другое меню.
 
 
 #define SetTestData(Title,Descript) {Title,Descript,TApi_NULL,sizeof(Descript)/sizeof(Descript[0]),TApi_NULL}
-#define DeclareTest(Name,Title,Descript) TestData_t Name ={Title,Descript,TApi_NULL,sizeof(Descript)/sizeof(Descript[0]),TApi_NULL}
+#define DeclareMenu(Name,Title,Descript,SpewBaseItems) TestMenu_t Name ={Title,Descript,TApi_NULL,sizeof(Descript)/sizeof(Descript[0]),TApi_NULL,SpewBaseItems}
 
 typedef struct  TApi_Data_s TApi_Data_t;
 #ifdef __cplusplus
 extern "C" 
 {
 #endif
-   TApi_Data_t *TApi_Init(TestMenu_t *MainMenu, TestMenu_t *BaseMenu); //MainMenu - основная менюшка, BaseMenu - дополнения к каждой менюшке.
-   void PrintTestMap(TestMenu_t *Test, int IncLevel);
-   void ParseTestKey(char Key);
+   void TApi_ParseTestKey(char Key);
+   TApi_BOOL TApi_Init(TestMenu_t *Main, TestMenu_t *Base);
+   TApi_BOOL TApi_PrevMenu();
+   TApi_BOOL TApi_Reset();
+   void TApi_DisableEndMsg();
+   void TApi_PrintMap();
 #ifdef __cplusplus
 }
 #endif

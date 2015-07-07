@@ -1,3 +1,4 @@
+
 #include "TestAPI.h"
 
 static TestMenu_t *CurrMenu;
@@ -60,7 +61,7 @@ TApi_BOOL PrintMenu(TestMenu_t *Menu)
    PrintMenuItems(Menu);
    if (BaseMenu&&Menu->SpewBaseItems)
    {
-      TApi_OutStr("- - - - - - - -");
+      TApi_OutStr("- - - - - - - -\r\n");
       PrintMenuItems(BaseMenu);
    }
    TApi_OutStr("******************************\r\n");
@@ -74,7 +75,7 @@ TApi_BOOL SetActiveMenu(TestMenu_t *Menu)
 {
    TApi_AssertNull(Menu, return TApi_FALSE);
 
-   Menu->PrevTest = CurrMenu;
+   Menu->PrevMenu = CurrMenu;
    CurrMenu = Menu;
    PrintMenu(CurrMenu);
    return TApi_TRUE;
@@ -82,14 +83,14 @@ TApi_BOOL SetActiveMenu(TestMenu_t *Menu)
 
 TestMenu_t *GetPrevTest(TestMenu_t *Menu)
 {
-   TApi_AssertNull(Menu, return TApi_FALSE);
-   return Menu->PrevTest;
+   TApi_AssertNull(Menu, return TApi_NULL);
+   return Menu->PrevMenu;
 }
 
 MenuItem_t *GetItem(TestMenu_t *Menu, int ItemNum)
 {
-   TApi_AssertNull(Menu, return TApi_FALSE);
-   TApi_AssertNull((ItemNum >= 0), return TApi_FALSE);
+   TApi_AssertNull(Menu, return TApi_NULL);
+   TApi_AssertNull((ItemNum >= 0), return TApi_NULL);
    if (ItemNum < Menu->NumItems)
    {
       return &Menu->Items[ItemNum];
@@ -97,7 +98,7 @@ MenuItem_t *GetItem(TestMenu_t *Menu, int ItemNum)
    else
       if (Menu->SpewBaseItems&&BaseMenu&&ItemNum < (Menu->NumItems + BaseMenu->NumItems))
       {
-         return &BaseMenu[ItemNum - Menu->NumItems];
+         return &BaseMenu->Items[ItemNum - Menu->NumItems];
       }
       else
       {
@@ -108,15 +109,14 @@ MenuItem_t *GetItem(TestMenu_t *Menu, int ItemNum)
 
 char NormalizeKey(char Key)
 {
-   char rKey;
    if (Key >= 'a' && Key <= 'z')
    {
-      rKey -= ('a' - 'A');
+      Key -= ('a' - 'A');
    }
-   return rKey;
+   return Key;
 }
 
-char *GetItemDescription(MenuItem_t *Item)
+const char *GetItemDescription(MenuItem_t *Item)
 {
    TApi_AssertNull(Item, return TApi_NULL);
    if (Item->IsMenu)
@@ -151,7 +151,7 @@ TApi_BOOL ValidateMenu(TestMenu_t *Menu)
          break;
       }
       CurKey = NormalizeKey(CurItem->Key);
-      j = i + 1;
+      j = i;
       do
       {
          TestItem = GetItem(Menu, j++);
@@ -163,36 +163,22 @@ TApi_BOOL ValidateMenu(TestMenu_t *Menu)
          if (CurKey == TestKey)
          {
             TApi_Error("Key '"); TApi_OutChar(CurKey); TApi_OutStr("' used in \""); TApi_OutStr(GetItemDescription(CurItem));
-            TApi_OutStr("\" ["); TApi_OutDec(i); TApi_OutStr("] (");/* PrintMenuTitle(Test);*/ TApi_OutStr(") and in \"");
+            TApi_OutStr("\" and in \"");
             TApi_OutStr(GetItemDescription(TestItem));
-            TApi_OutStr("\" ["); TApi_OutDec(j); TApi_OutStr("] (");/* PrintMenuTitle(Test);*/ TApi_OutStr(")\r\n");
+            TApi_OutStr("\" [");PrintMenuTitle(Menu);TApi_OutStr("]\r\n");
             TestValid = TApi_FALSE;
          }
       } while (TestItem);
+      if(CurItem->IsMenu)
+      {
+         ValidateMenu(CurItem->Ptr.Menu);
+      }
    } while (CurItem);
    Menu->IncLevel--;
    return TestValid;
 }
 
-TApi_BOOL TApi_Init(TestMenu_t *Main, TestMenu_t *Base)
-{
-   TApi_BOOL IsValid;
-   TApi_AssertNull(Main);
-   if (MainMenu)
-   {
-      TApi_Warning("Main test already set! ("); PrintMenuTitle(MainMenu); TApi_OutStr(")\r\n");
-   }
-   if (!MainMenu->Title)
-   {
-      TApi_Warning("Main test has no title!\r\n");
-   }
-   BaseMenu = Base;//Если задано - установится, если не задано - затрёт предыдущую установку.
 
-   MainMenu = Main;
-   IsValid=ValidateMenu(Main);
-   SetActiveMenu(Main);
-   return IsValid;
-}
 
 
 void PrintCharNumTimes(char c, int num)
@@ -210,7 +196,7 @@ void PrintMenuMap(TestMenu_t *Menu, int IncLevel)
 {
    int i;
    MenuItem_t *Item;
-   TApi_AssertNull(Menu);
+   TApi_AssertNull(Menu,return);
    if (Menu->IncLevel>0)
    {
       return;
@@ -246,14 +232,14 @@ void PrintMenuMap(TestMenu_t *Menu, int IncLevel)
       TApi_OutStr("\r\n");
       if (Item->IsMenu)
       {
-         PrintTestMap(Item->Ptr.Menu, IncLevel + 1);
+         PrintMenuMap(Item->Ptr.Menu, IncLevel + 1);
       }
    } while (Item);
    Menu->IncLevel--;
 }
 
 
-void ParseTestKey(char Key)
+void TApi_ParseTestKey(char Key)
 {
    int i = 0;
    char TestKey;
@@ -287,10 +273,11 @@ void ParseTestKey(char Key)
          {
             TApi_OutStr("\r\nTest switched to "); PrintMenuTitle(Item->Ptr.Menu); TApi_OutStr("\r\n");
             SetActiveMenu(Item->Ptr.Menu);
+            SpewFinalMessage = TApi_FALSE;
          }
          else
          {
-            Description = CurrMenu->Items[i].Description;
+            Description = Item->Description;
             SpewFinalMessage = TApi_TRUE;
             Item->Ptr.Func(Item->Params);
             if (SpewFinalMessage)
@@ -302,49 +289,65 @@ void ParseTestKey(char Key)
       }
    } while (Item);
 
-   if (!Item->IsMenu&&SpewFinalMessage)
+   if (SpewFinalMessage)
    {
       PrintMenu(CurrMenu);
    }
 }
 
-void TGoToMain(void *p)
+
+
+
+TApi_BOOL TApi_Init(TestMenu_t *Main, TestMenu_t *Base)
 {
-   SetActiveTest(MainMenu);
+   TApi_BOOL IsValid;
+   TApi_AssertNull(Main,return TApi_FALSE);
+   if (MainMenu)
+   {
+      TApi_Warning("Main test already set! ("); PrintMenuTitle(MainMenu); TApi_OutStr(")\r\n");
+   }
+   if (!Main->Title)
+   {
+      TApi_Warning("Main test has no title!\r\n");
+   }
+   BaseMenu = Base;//Если задано - установится, если не задано - затрёт предыдущую установку.
+
+   MainMenu = Main;
+   IsValid=ValidateMenu(Main);
+   SetActiveMenu(Main);
+   return IsValid;
 }
 
-void TGoToPrev(void *p)
+TApi_BOOL TApi_PrevMenu()
 {
-   if (!CurrMenu)
-   {
-      TApi_Error("Curren test is NULL!\r\n");
-      return;
-   }
-   if (!CurrMenu->PrevTest)
-   {
-      TApi_Warning("Prev test is NULL!\r\n");
-      return;
-   }
+   TApi_AssertNull(CurrMenu,return TApi_FALSE);
+   TApi_AssertNull(CurrMenu->PrevMenu,return TApi_FALSE);
    /*Пользоваться SetActiveTest тут нельзя, она сделает текущий тест предыдущим, в итоге всё зациклится*/
-   CurrMenu = CurrMenu->PrevTest;
+   CurrMenu = CurrMenu->PrevMenu;
    PrintMenu(CurrMenu);
+   TApi_DisableEndMsg();
+   return TApi_TRUE;
 }
 
-void TPrintCurMap(void *p)
+TApi_BOOL TApi_Reset()
 {
-   if (!CurrMenu)
-   {
-      TApi_Error("Curren test is NULL!\r\n");
-      return;
-   }
-   PrintTestMap(CurrMenu, 0);
+   TApi_AssertNull(MainMenu,return TApi_FALSE);
+   CurrMenu=MainMenu;
+   CurrMenu->PrevMenu=CurrMenu;
+   PrintMenu(CurrMenu);
+   TApi_DisableEndMsg();
+   return TApi_TRUE;
 }
-MenuItem_t BaseTestMenu[] =
+
+void TApi_DisableEndMsg()
 {
-   MenuItemFunc('m', TPrintCurMap, "Print map")
-   MenuItemFunc('p', TGoToPrev, "Prev menu")
-   MenuItemFunc('q', TGoToMain, "Main menu")
+   SpewFinalMessage=TApi_FALSE;
+}
 
-};
 
-DeclareMenu(BaseMenu, "Base test menu", BaseTestMenu);
+void TApi_PrintMap()
+{
+   TApi_AssertNull(CurrMenu,return);
+   PrintMenuMap(CurrMenu, 0);
+}
+

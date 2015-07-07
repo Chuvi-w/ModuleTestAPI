@@ -13,4 +13,5 @@ MenuItem_t Test2Menu[]=
    MenuItemFunc('3',NULL,"Func2_3")
    MenuItemFunc('4',NULL,"Func2_4")
 };
-DeclareTest(Test2,"Test #2",Test2Menu);
+
+DeclareMenu(Test2,"Test #2",Test2Menu,TApi_TRUE);

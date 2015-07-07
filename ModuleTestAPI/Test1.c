@@ -10,14 +10,14 @@ void TExit(void *p)
    exit(0);
 }
 
-MenuItem_t MainMenu[]=
+MenuItem_t MainMenuItems[]=
 {
    MenuItemLink('1',&Test1)
    MenuItemLink('2',&Test2)
    MenuItemFunc('z',TExit,"Exit")
 };
 
-DeclareTest(MainMenu,"Main Test",MainMenu);
+DeclareMenu(MainMenu,"Main Test",MainMenuItems,TApi_TRUE);
 
 
 
@@ -26,8 +26,8 @@ MenuItem_t Test1Menu[]=
    MenuItemFunc('1',NULL,"Func1")
    MenuItemFunc('2',NULL,"Func2")
    MenuItemLink('0',&Test2)
-   MenuItemFunc('m',NULL,"Func3")
+   MenuItemFunc('3',NULL,"Func3")
    MenuItemFunc('4',NULL,"Func4")
 };
-DeclareTest(Test1,"Test #1",Test1Menu);
+DeclareMenu(Test1,"Test #1",Test1Menu,TApi_TRUE);
 
