@@ -3,7 +3,7 @@
 static TestMenu_t *CurrMenu;
 static TestMenu_t *MainMenu;
 static TestMenu_t *BaseMenu;
-
+static TApi_BOOL SpewFinalMessage = TApi_TRUE;
 #define TApi_AssertNull(Item,ret)\
 if(!Item)\
 {\
@@ -67,7 +67,7 @@ TApi_BOOL PrintMenu(TestMenu_t *Menu)
    return TApi_TRUE;
 }
    
-   
+
 
 
 TApi_BOOL SetActiveMenu(TestMenu_t *Menu)
@@ -86,93 +86,98 @@ TestMenu_t *GetPrevTest(TestMenu_t *Menu)
    return Menu->PrevTest;
 }
 
+MenuItem_t *GetItem(TestMenu_t *Menu, int ItemNum)
+{
+   TApi_AssertNull(Menu, return TApi_FALSE);
+   TApi_AssertNull((ItemNum >= 0), return TApi_FALSE);
+   if (ItemNum < Menu->NumItems)
+   {
+      return &Menu->Items[ItemNum];
+   }
+   else
+      if (Menu->SpewBaseItems&&BaseMenu&&ItemNum < (Menu->NumItems + BaseMenu->NumItems))
+      {
+         return &BaseMenu[ItemNum - Menu->NumItems];
+      }
+      else
+      {
+         return NULL;
+      }
+}
 
-TApi_BOOL ValidateMenu(TestMenu_t *Test)
+
+char NormalizeKey(char Key)
+{
+   char rKey;
+   if (Key >= 'a' && Key <= 'z')
+   {
+      rKey -= ('a' - 'A');
+   }
+   return rKey;
+}
+
+char *GetItemDescription(MenuItem_t *Item)
+{
+   TApi_AssertNull(Item, return TApi_NULL);
+   if (Item->IsMenu)
+   {
+      return GetMenuTitle(Item->Ptr.Menu);
+   }
+   else
+   {
+      return Item->Description;
+   }
+   return TApi_NULL;
+}
+
+TApi_BOOL ValidateMenu(TestMenu_t *Menu)
 {
    int i = 0, j = 0;
+   MenuItem_t *CurItem, *TestItem;
+   char CurKey, TestKey;
    TApi_BOOL TestValid = TApi_TRUE;
-   if (!Test)
-   {
-      TApi_Error("Test is NULL\r\n");
-      return TApi_FALSE;
-   }
-   if (Test->IncLevel > 0)
+   TApi_AssertNull(Menu, return TApi_FALSE);
+   if (Menu->IncLevel > 0)
    {
       return TApi_TRUE;
    }
-   Test->IncLevel++;
-   TApi_OutStr("Validating "); PrintMenuTitle(Test); TApi_Endl();
-   for (i = 0; i < Test->NumItems; i++)
+   Menu->IncLevel++;
+   TApi_OutStr("Validating "); PrintMenuTitle(Menu); TApi_Endl();
+   do
    {
-      for (j = i + 1; j < Test->NumItems; j++)
+      CurItem = GetItem(Menu, i++);
+      if (!CurItem)
       {
-         if (Test->Items[i].Key == Test->Items[j].Key)
+         break;
+      }
+      CurKey = NormalizeKey(CurItem->Key);
+      j = i + 1;
+      do
+      {
+         TestItem = GetItem(Menu, j++);
+         if (!TestItem)
          {
-            TApi_Error("Key '"); TApi_OutChar(Test->Items[i].Key); TApi_OutStr("' used in \"");
-            if (Test->Items[i].IsMenu)
-            {
-               PrintMenuTitle((TestMenu_t*)Test->Items[i].pAction);
-            }
-            else
-            {
-               TApi_OutStr(Test->Items[i].Description);
-            }
-            TApi_OutStr("\" ["); TApi_OutDec(i); TApi_OutStr("] ("); PrintMenuTitle(Test); TApi_OutStr(") and in \"");
-            if (Test->Items[j].IsMenu)
-            {
-               PrintMenuTitle((TestMenu_t*)Test->Items[j].pAction);
-            }
-            else
-            {
-               TApi_OutStr(Test->Items[j].Description);
-            }
-            TApi_OutStr("\" ["); TApi_OutDec(j); TApi_OutStr("] ("); PrintMenuTitle(Test); TApi_OutStr(")\r\n");
+            break;
+         }
+         TestKey = NormalizeKey(TestItem->Key);
+         if (CurKey == TestKey)
+         {
+            TApi_Error("Key '"); TApi_OutChar(CurKey); TApi_OutStr("' used in \""); TApi_OutStr(GetItemDescription(CurItem));
+            TApi_OutStr("\" ["); TApi_OutDec(i); TApi_OutStr("] (");/* PrintMenuTitle(Test);*/ TApi_OutStr(") and in \"");
+            TApi_OutStr(GetItemDescription(TestItem));
+            TApi_OutStr("\" ["); TApi_OutDec(j); TApi_OutStr("] (");/* PrintMenuTitle(Test);*/ TApi_OutStr(")\r\n");
             TestValid = TApi_FALSE;
          }
-      }
-
-      for (j = 0; j < BaseMenu.NumItems; j++)
-      {
-         if (Test->Items[i].Key == BaseMenu.Items[j].Key)
-         {
-            TApi_Error("Key '"); TApi_OutChar(Test->Items[i].Key); TApi_OutStr("' used in \"");
-            if (Test->Items[i].IsMenu)
-            {
-               PrintMenuTitle((TestMenu_t*)Test->Items[i].pAction);
-            }
-            else
-            {
-               TApi_OutStr(Test->Items[i].Description);
-            }
-            TApi_OutStr("\" ["); TApi_OutDec(i); TApi_OutStr("] ("); PrintMenuTitle(Test); TApi_OutStr(") and in \"");
-            if (BaseMenu.Items[j].IsMenu)
-            {
-               PrintMenuTitle((TestMenu_t*)BaseMenu.Items[j].pAction);
-            }
-            else
-            {
-               TApi_OutStr(BaseMenu.Items[j].Description);
-            }
-            TApi_OutStr("\" ["); TApi_OutDec(j); TApi_OutStr("] ("); PrintMenuTitle(&BaseMenu); TApi_OutStr(")\r\n");
-            TestValid = TApi_FALSE;
-         }
-      }
-      if (Test->Items[i].IsMenu)
-      {
-         TestValid &= ValidateMenu((TestMenu_t*)Test->Items[i].pAction);
-      }
-   }
-   Test->IncLevel--;
+      } while (TestItem);
+   } while (CurItem);
+   Menu->IncLevel--;
    return TestValid;
 }
 
-TApi_BOOL TApi_Init(TestMenu_t *MainMenu, TestMenu_t *BaseMenu)
+TApi_BOOL TApi_Init(TestMenu_t *Main, TestMenu_t *Base)
 {
-   if (!MainMenu)
-   {
-      TApi_Error("Test is NULL\r\n");
-      return TApi_FALSE;
-   }
+   TApi_BOOL IsValid;
+   TApi_AssertNull(Main);
    if (MainMenu)
    {
       TApi_Warning("Main test already set! ("); PrintMenuTitle(MainMenu); TApi_OutStr(")\r\n");
@@ -181,10 +186,12 @@ TApi_BOOL TApi_Init(TestMenu_t *MainMenu, TestMenu_t *BaseMenu)
    {
       TApi_Warning("Main test has no title!\r\n");
    }
-   MainMenu = MainMenu;
-   ValidateMenu(MainMenu);
-   SetActiveTest(MainMenu);
-   return TApi_TRUE;
+   BaseMenu = Base;//Если задано - установится, если не задано - затрёт предыдущую установку.
+
+   MainMenu = Main;
+   IsValid=ValidateMenu(Main);
+   SetActiveMenu(Main);
+   return IsValid;
 }
 
 
@@ -199,71 +206,50 @@ void PrintCharNumTimes(char c, int num)
 
 
 
-void PrintTestMap(TestMenu_t *Test, int IncLevel)
+void PrintMenuMap(TestMenu_t *Menu, int IncLevel)
 {
    int i;
-   if (!Test)
+   MenuItem_t *Item;
+   TApi_AssertNull(Menu);
+   if (Menu->IncLevel>0)
    {
-      TApi_Error("Test is NULL\r\n");
       return;
    }
-   if (Test->IncLevel>0)
-   {
-      //TApi_Warning("Test \"");PrintTestTitle(Test);TApi_OutStr("\" already described\r\n");
-      return;
-   }
-   Test->IncLevel++;
+   Menu->IncLevel++;
    if (!IncLevel)
    {
-      TApi_OutStr("\r\n**************"); PrintMenuTitle(Test); TApi_OutStr("**************\r\n");
+      TApi_OutStr("\r\n**************"); PrintMenuTitle(Menu); TApi_OutStr("**************\r\n");
    }
-   for (i = 0; i < Test->NumItems; i++)
+   i = 0;
+   do
    {
+      Item = GetItem(Menu, i++);
+      if (!Item)
+         break;
       TApi_OutStr("*         ");
       PrintCharNumTimes(' ', (IncLevel + 1) * 4);
-      TApi_OutChar(Test->Items[i].Key);
+      TApi_OutChar(Item->Key);
       TApi_OutStr(" -  ");
 
-      if (Test->Items[i].IsMenu)
+      if (Item->IsMenu)
       {
-         TApi_OutStr(" ["); PrintMenuTitle((TestMenu_t*)Test->Items[i].pAction); TApi_OutStr("]");
+         TApi_OutStr(" ["); PrintMenuTitle(Item->Ptr.Menu); TApi_OutStr("]");
       }
       else
       {
-         TApi_OutStr(Test->Items[i].Description);
+         TApi_OutStr(Item->Description);
       }
-      if (!Test->Items[i].pAction)
+      if (!Item->Ptr.Func)//если Func==0, то Menu тоже будет ==0, ибо union/
       {
          TApi_OutStr(" (not implemented)");
       }
       TApi_OutStr("\r\n");
-      if (Test->Items[i].IsMenu)
+      if (Item->IsMenu)
       {
-         PrintTestMap((TestMenu_t*)Test->Items[i].pAction, IncLevel + 1);
+         PrintTestMap(Item->Ptr.Menu, IncLevel + 1);
       }
-   }
-   if (/*!IsMainTest(Test)*/TApi_TRUE)
-   {
-      for (i = 0; i < BaseMenu.NumItems; i++)
-      {
-
-         TApi_OutStr("*         ");
-         PrintCharNumTimes(' ', (IncLevel + 1) * 4);
-         TApi_OutChar(BaseMenu.Items[i].Key);
-         TApi_OutStr(" -  ");
-         TApi_OutStr(BaseMenu.Items[i].Description);
-         if (BaseMenu.Items[i].IsMenu)
-         {
-            TApi_OutStr(" ["); GetMenuTitle((TestMenu_t*)Test->Items[i].pAction); TApi_OutStr("]");
-         }
-         if (!BaseMenu.Items[i].pAction)
-         {
-            TApi_OutStr(" (not implemented)");
-         }
-         TApi_OutStr("\r\n");
-      }
-   }
-   Test->IncLevel--;
+   } while (Item);
+   Menu->IncLevel--;
 }
 
 
@@ -271,87 +257,52 @@ void ParseTestKey(char Key)
 {
    int i = 0;
    char TestKey;
+   MenuItem_t *Item;
    TApi_BOOL bKeyFound = TApi_FALSE;
    char *Description;
    TApi_BOOL IsMenu = TApi_FALSE;
    if (!CurrMenu)
    {
-      TApi_Warning("Test not set!\r\n");
+      TApi_Warning("CurrMenu not set!\r\n");
    }
 
-   if (Key >= 'a' && Key <= 'z')
+  
+   Key = NormalizeKey(Key);
+   do
    {
-      Key -= ('a' - 'A');
-   }
+      Item = GetItem(CurrMenu, i++);
+      if (!Item)
+         break;
 
-   for (i = 0; i < CurrMenu->NumItems; i++)
-   {
-      TestKey = CurrMenu->Items[i].Key;
-      if (TestKey >= 'a' && TestKey <= 'z')
-      {
-         TestKey -= ('a' - 'A');
-      }
-
+      TestKey = NormalizeKey(Item->Key);
       if (TestKey == Key)
       {
          bKeyFound = TApi_TRUE;
-         if (!CurrMenu->Items[i].pAction)
+         if (!Item->Ptr.Func)
          {
             TApi_OutStr("Not implemented!\r\n");
             break;
          }
-         IsMenu = CurrMenu->Items[i].IsMenu;
-
-         if (IsMenu)
+         if (Item->IsMenu)
          {
-            TApi_OutStr("\r\nTest switched to "); PrintMenuTitle((TestMenu_t*)CurrMenu->Items[i].pAction); TApi_OutStr("\r\n");
-            SetActiveTest((TestMenu_t*)CurrMenu->Items[i].pAction);
+            TApi_OutStr("\r\nTest switched to "); PrintMenuTitle(Item->Ptr.Menu); TApi_OutStr("\r\n");
+            SetActiveMenu(Item->Ptr.Menu);
          }
          else
          {
             Description = CurrMenu->Items[i].Description;
-            ((pTestFunc)CurrMenu->Items[i].pAction)(CurrMenu->Items[i].Params);
-            TApi_OutStr("\r\n _____\""); TApi_OutStr(Description); TApi_OutStr("\" end______\r\n");
+            SpewFinalMessage = TApi_TRUE;
+            Item->Ptr.Func(Item->Params);
+            if (SpewFinalMessage)
+            {
+               TApi_OutStr("\r\n _____\""); TApi_OutStr(Description); TApi_OutStr("\" end______\r\n");
+            }
          }
          break;
       }
-   }
-   if (/*!IsMainTest(Test)*/TApi_TRUE)
-   {
-      for (i = 0; i < BaseMenu.NumItems; i++)
-      {
-         TestKey = BaseMenu.Items[i].Key;
-         if (TestKey >= 'a' && TestKey <= 'z')
-         {
-            TestKey -= ('a' - 'A');
-         }
+   } while (Item);
 
-         if (TestKey == Key)
-         {
-            bKeyFound = TApi_TRUE;
-            if (!BaseMenu.Items[i].pAction)
-            {
-               TApi_OutStr("Not implemented!\r\n");
-               break;
-            }
-            IsMenu = BaseMenu.Items[i].IsMenu;
-
-            if (IsMenu)
-            {
-               TApi_OutStr("\r\nTest switched to "); PrintMenuTitle((TestMenu_t*)BaseMenu.Items[i].pAction); TApi_OutStr("\r\n");
-               SetActiveTest((TestMenu_t*)BaseMenu.Items[i].pAction);
-            }
-            else
-            {
-               Description = BaseMenu.Items[i].Description;
-               ((pTestFunc)BaseMenu.Items[i].pAction)(BaseMenu.Items[i].Params);
-               TApi_OutStr("\r\n _____\""); TApi_OutStr(Description); TApi_OutStr("\" end______\r\n");
-            }
-            break;
-         }
-      }
-   }
-   if (!IsMenu)
+   if (!Item->IsMenu&&SpewFinalMessage)
    {
       PrintMenu(CurrMenu);
    }
@@ -395,4 +346,5 @@ MenuItem_t BaseTestMenu[] =
    MenuItemFunc('q', TGoToMain, "Main menu")
 
 };
-DeclareTest(BaseMenu, "Base test menu", BaseTestMenu);
+
+DeclareMenu(BaseMenu, "Base test menu", BaseTestMenu);
