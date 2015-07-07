@@ -7,7 +7,6 @@
 
 void PrintMap(void *p)
 {
-   TApi_DisableEndMsg();
    TApi_PrintMap();
 }
 
